@@ -1,12 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use eframe::egui;
+use eframe::egui::{self, FontData, FontDefinitions, FontFamily};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use uuid::Uuid;
 
-const APP_VERSION: &str = "0.1.0";
+const APP_VERSION: &str = "0.2.0";
 const APP_NAME: &str = "Production Manager";
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -80,13 +80,23 @@ impl Category {
     }
 
     fn to_markdown(&self) -> String {
-        let mut md = format!("# {}\n\n", self.name);
+        let mut md = format!("# {}
+
+", self.name);
         for item in &self.items {
-            md.push_str(&format!("## {}\n\n", item.title));
+            md.push_str(&format!("## {}
+
+", item.title));
             if !item.comment.is_empty() {
-                md.push_str(&format!("{}\n\n", item.comment));
+                md.push_str(&format!("{}
+
+", item.comment));
             }
-            md.push_str(&format!("*Created: {}*\n\n---\n\n", item.created_at));
+            md.push_str(&format!("*Created: {}*
+
+---
+
+", item.created_at));
         }
         md
     }
@@ -101,9 +111,9 @@ impl Default for AppData {
     fn default() -> Self {
         Self {
             categories: vec![
-                Category::new("Extensions"),
-                Category::new("Web Apps"),
-                Category::new("Windows Apps"),
+                Category::new("拡張機能"),
+                Category::new("Webアプリ"),
+                Category::new("Windowsアプリ"),
             ],
         }
     }
@@ -128,7 +138,9 @@ struct ProductionManager {
 }
 
 impl ProductionManager {
-    fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        Self::setup_fonts(&cc.egui_ctx);
+        
         let data_path = Self::get_data_path();
         let data = Self::load_data(&data_path);
         
@@ -149,6 +161,43 @@ impl ProductionManager {
             status_message: String::new(),
             status_timer: 0.0,
         }
+    }
+
+    fn setup_fonts(ctx: &egui::Context) {
+        let mut fonts = FontDefinitions::default();
+        
+        if let Ok(font_data) = std::fs::read("C:/Windows/Fonts/YuGothM.ttc") {
+            fonts.font_data.insert(
+                "yu_gothic".to_owned(),
+                FontData::from_owned(font_data).into(),
+            );
+            fonts.families.get_mut(&FontFamily::Proportional).unwrap()
+                .insert(1, "yu_gothic".to_owned());
+            fonts.families.get_mut(&FontFamily::Monospace).unwrap()
+                .insert(1, "yu_gothic".to_owned());
+        } else if let Ok(font_data) = std::fs::read("C:/Windows/Fonts/meiryo.ttc") {
+            fonts.font_data.insert(
+                "meiryo".to_owned(),
+                FontData::from_owned(font_data).into(),
+            );
+            fonts.families.get_mut(&FontFamily::Proportional).unwrap()
+                .insert(1, "meiryo".to_owned());
+            fonts.families.get_mut(&FontFamily::Monospace).unwrap()
+                .insert(1, "meiryo".to_owned());
+        }
+        
+        if let Ok(font_data) = std::fs::read("C:/Windows/Fonts/seguiemj.ttf") {
+            fonts.font_data.insert(
+                "emoji".to_owned(),
+                FontData::from_owned(font_data).into(),
+            );
+            fonts.families.get_mut(&FontFamily::Proportional).unwrap()
+                .push("emoji".to_owned());
+            fonts.families.get_mut(&FontFamily::Monospace).unwrap()
+                .push("emoji".to_owned());
+        }
+        
+        ctx.set_fonts(fonts);
     }
 
     fn get_data_path() -> PathBuf {
@@ -180,222 +229,181 @@ impl ProductionManager {
         self.status_message = message.to_string();
         self.status_timer = 3.0;
     }
-
-    fn export_category_markdown(&self, category_index: usize) {
-        if let Some(category) = self.data.categories.get(category_index) {
-            let markdown = category.to_markdown();
-            let filename = format!("{}.md", category.name.replace(" ", "_"));
-            
-            if let Some(path) = rfd::FileDialog::new()
-                .set_file_name(&filename)
-                .add_filter("Markdown", &["md"])
-                .save_file()
-            {
-                if fs::write(&path, &markdown).is_ok() {
-                    println!("Exported to {:?}", path);
-                }
-            }
-        }
-    }
-}
-
-impl eframe::App for ProductionManager {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if self.status_timer > 0.0 {
-            self.status_timer -= ctx.input(|i| i.predicted_dt);
-            ctx.request_repaint();
-        }
-
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.heading(format!("{} v{}", APP_NAME, APP_VERSION));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if !self.status_message.is_empty() && self.status_timer > 0.0 {
-                        ui.label(egui::RichText::new(&self.status_message).color(egui::Color32::GREEN));
-                    }
-                });
-            });
-        });
-
-        egui::CentralPanel::default().show(ctx, |ui| {
-            let available_width = ui.available_width();
-            let column_count = self.data.categories.len();
-            let column_width = (available_width / column_count as f32) - 10.0;
-
-            ui.horizontal(|ui| {
-                for cat_idx in 0..self.data.categories.len() {
-                    ui.vertical(|ui| {
-                        ui.set_width(column_width);
-                        self.render_category(ui, cat_idx, column_width);
-                    });
-                    ui.add_space(5.0);
-                }
-            });
-        });
-
-        if ctx.input(|i| i.pointer.any_released()) {
-            if let (Some((from_cat, from_idx)), Some((to_cat, to_idx))) = (self.dragging, self.drag_target) {
-                if from_cat == to_cat {
-                    self.data.categories[from_cat].move_item(from_idx, to_idx);
-                    self.save_data();
-                    self.show_status("Item reordered");
-                }
-            }
-            self.dragging = None;
-            self.drag_target = None;
-        }
-
-        self.render_add_popup(ctx);
-        self.render_edit_popup(ctx);
-    }
-
-    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
-        self.save_data();
-    }
 }
 
 impl ProductionManager {
-    fn render_category(&mut self, ui: &mut egui::Ui, cat_idx: usize, column_width: f32) {
-        let category_name = self.data.categories[cat_idx].name.clone();
+    fn render_category(&mut self, ui: &mut egui::Ui, cat_idx: usize) {
+        let category = &self.data.categories[cat_idx];
+        let cat_name = category.name.clone();
+        let items_count = category.items.len();
 
-        ui.group(|ui| {
-            ui.set_width(column_width - 10.0);
+        egui::Frame::default()
+            .fill(egui::Color32::from_rgb(45, 45, 48))
+            .rounding(8.0)
+            .inner_margin(10.0)
+            .show(ui, |ui| {
+                ui.set_min_width(250.0);
+                ui.set_max_width(280.0);
 
-            ui.horizontal(|ui| {
-                ui.heading(&category_name);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("MD").on_hover_text("Export to Markdown").clicked() {
-                        self.export_category_markdown(cat_idx);
-                    }
-
-                    ui.menu_button("Sort", |ui| {
-                        if ui.button("By Title").clicked() {
-                            self.data.categories[cat_idx].sort_by_title();
-                            self.save_data();
-                            ui.close_menu();
-                        }
-                        if ui.button("By Date").clicked() {
-                            self.data.categories[cat_idx].sort_by_date();
-                            self.save_data();
-                            ui.close_menu();
-                        }
+                ui.horizontal(|ui| {
+                    ui.heading(&cat_name);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(format!("({})", items_count));
                     });
                 });
-            });
 
-            ui.separator();
+                ui.add_space(5.0);
 
-            egui::ScrollArea::vertical()
-                .max_height(ui.available_height() - 50.0)
-                .show(ui, |ui| {
-                    let mut action: Option<(String, bool)> = None;
-                    let items_len = self.data.categories[cat_idx].items.len();
+                if ui.button("➕ Add Item").clicked() {
+                    self.show_add_popup = true;
+                    self.add_popup_category = cat_idx;
+                    self.new_item_title.clear();
+                    self.new_item_comment.clear();
+                }
 
-                    for item_idx in 0..items_len {
-                        let is_dragging = self.dragging == Some((cat_idx, item_idx));
-                        let is_drag_target = self.drag_target == Some((cat_idx, item_idx));
+                ui.add_space(5.0);
 
-                        if is_drag_target {
-                            ui.colored_label(egui::Color32::YELLOW, ">> Drop here <<");
+                ui.horizontal(|ui| {
+                    if ui.small_button("A-Z").clicked() {
+                        self.data.categories[cat_idx].sort_by_title();
+                        self.save_data();
+                    }
+                    if ui.small_button("Z-A").clicked() {
+                        self.data.categories[cat_idx].sort_by_title();
+                        self.data.categories[cat_idx].items.reverse();
+                        self.data.categories[cat_idx].reorder_items();
+                        self.save_data();
+                    }
+                    if ui.small_button("📅 Date").clicked() {
+                        self.data.categories[cat_idx].sort_by_date();
+                        self.save_data();
+                    }
+                });
+
+                ui.add_space(5.0);
+
+                if ui.button("📄 Export MD").clicked() {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .set_file_name(&format!("{}.md", cat_name))
+                        .add_filter("Markdown", &["md"])
+                        .save_file()
+                    {
+                        let md = self.data.categories[cat_idx].to_markdown();
+                        if fs::write(&path, md).is_ok() {
+                            self.show_status(&format!("Exported to {}", path.display()));
                         }
+                    }
+                }
 
-                        let item = &self.data.categories[cat_idx].items[item_idx];
-                        let item_id = item.id.clone();
-                        let item_title = item.title.clone();
-                        let item_comment = item.comment.clone();
-                        let item_created = item.created_at.clone();
+                ui.separator();
 
-                        let frame = egui::Frame::none()
-                            .fill(if is_dragging {
-                                egui::Color32::from_rgb(70, 70, 90)
+                egui::ScrollArea::vertical()
+                    .max_height(400.0)
+                    .show(ui, |ui| {
+                        let items: Vec<_> = self.data.categories[cat_idx]
+                            .items
+                            .iter()
+                            .enumerate()
+                            .map(|(i, item)| (i, item.id.clone(), item.title.clone(), item.comment.clone()))
+                            .collect();
+
+                        for (item_idx, item_id, title, comment) in items {
+                            let is_dragging = self.dragging == Some((cat_idx, item_idx));
+                            let is_target = self.drag_target == Some((cat_idx, item_idx));
+
+                            let frame_color = if is_dragging {
+                                egui::Color32::from_rgb(80, 80, 100)
+                            } else if is_target {
+                                egui::Color32::from_rgb(60, 100, 60)
                             } else {
-                                egui::Color32::from_rgb(45, 45, 55)
-                            })
-                            .rounding(5.0)
-                            .inner_margin(8.0);
+                                egui::Color32::from_rgb(55, 55, 60)
+                            };
 
-                        frame.show(ui, |ui| {
-                            ui.set_width(column_width - 30.0);
+                            let response = egui::Frame::default()
+                                .fill(frame_color)
+                                .rounding(4.0)
+                                .inner_margin(8.0)
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label("☰");
+                                        ui.vertical(|ui| {
+                                            ui.strong(&title);
+                                            if !comment.is_empty() {
+                                                ui.label(egui::RichText::new(&comment).small().weak());
+                                            }
+                                        });
+                                    });
 
-                            let response = ui.vertical(|ui| {
-                                ui.horizontal(|ui| {
-                                    ui.label(egui::RichText::new("=").monospace());
-                                    ui.strong(&item_title);
-                                });
-
-                                if !item_comment.is_empty() {
-                                    ui.label(egui::RichText::new(&item_comment).small().color(egui::Color32::GRAY));
-                                }
-
-                                ui.horizontal(|ui| {
-                                    ui.label(egui::RichText::new(&item_created).small().color(egui::Color32::DARK_GRAY));
-
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        if ui.small_button("X").on_hover_text("Delete").clicked() {
-                                            action = Some((item_id.clone(), true));
+                                    ui.horizontal(|ui| {
+                                        if ui.small_button("✏️").clicked() {
+                                            self.show_edit_popup = true;
+                                            self.edit_category = cat_idx;
+                                            self.edit_item_id = item_id.clone();
+                                            self.edit_item_title = title.clone();
+                                            self.edit_item_comment = comment.clone();
                                         }
-                                        if ui.small_button("E").on_hover_text("Edit").clicked() {
-                                            action = Some((item_id.clone(), false));
+                                        if ui.small_button("🗑️").clicked() {
+                                            self.data.categories[cat_idx].remove_item(&item_id);
+                                            self.save_data();
+                                            self.show_status("Item deleted");
                                         }
                                     });
-                                });
-                            });
+                                })
+                                .response;
 
-                            let response = response.response.interact(egui::Sense::drag());
+                            let response = response.interact(egui::Sense::drag());
 
                             if response.drag_started() {
                                 self.dragging = Some((cat_idx, item_idx));
                             }
 
-                            if response.hovered() && self.dragging.is_some() && self.dragging != Some((cat_idx, item_idx)) {
+                            if response.hovered() && self.dragging.is_some() {
                                 self.drag_target = Some((cat_idx, item_idx));
                             }
-                        });
 
-                        ui.add_space(5.0);
-                    }
+                            if response.drag_stopped() {
+                                if let (Some((from_cat, from_idx)), Some((to_cat, to_idx))) =
+                                    (self.dragging, self.drag_target)
+                                {
+                                    if from_cat == to_cat && from_idx != to_idx {
+                                        self.data.categories[from_cat].move_item(from_idx, to_idx);
+                                        self.save_data();
+                                        self.show_status("Item moved");
+                                    }
+                                }
+                                self.dragging = None;
+                                self.drag_target = None;
+                            }
 
-                    if let Some((id, is_delete)) = action {
-                        if is_delete {
-                            self.data.categories[cat_idx].remove_item(&id);
-                            self.save_data();
-                            self.show_status("Item deleted");
-                        } else {
-                            if let Some(item) = self.data.categories[cat_idx].items.iter().find(|i| i.id == id) {
-                                self.show_edit_popup = true;
-                                self.edit_category = cat_idx;
-                                self.edit_item_id = id;
-                                self.edit_item_title = item.title.clone();
-                                self.edit_item_comment = item.comment.clone();
+                            ui.add_space(4.0);
+                        }
+
+                        if self.dragging.is_some() {
+                            let drop_response = ui.allocate_response(
+                                egui::vec2(ui.available_width(), 30.0),
+                                egui::Sense::hover(),
+                            );
+                            if drop_response.hovered() {
+                                self.drag_target = Some((cat_idx, self.data.categories[cat_idx].items.len()));
+                                ui.painter().rect_filled(
+                                    drop_response.rect,
+                                    4.0,
+                                    egui::Color32::from_rgb(60, 100, 60),
+                                );
                             }
                         }
-                    }
-                });
-
-            ui.separator();
-            if ui.button("+ Add Item").clicked() {
-                self.show_add_popup = true;
-                self.add_popup_category = cat_idx;
-                self.new_item_title.clear();
-                self.new_item_comment.clear();
-            }
-        });
+                    });
+            });
     }
 
     fn render_add_popup(&mut self, ctx: &egui::Context) {
-        if !self.show_add_popup {
-            return;
-        }
-
         egui::Window::new("Add New Item")
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label("Category:");
-                    ui.label(egui::RichText::new(&self.data.categories[self.add_popup_category].name).strong());
-                });
+                let cat_name = self.data.categories[self.add_popup_category].name.clone();
+                ui.label(format!("Category: {}", cat_name));
 
                 ui.add_space(10.0);
 
@@ -433,10 +441,6 @@ impl ProductionManager {
     }
 
     fn render_edit_popup(&mut self, ctx: &egui::Context) {
-        if !self.show_edit_popup {
-            return;
-        }
-
         egui::Window::new("Edit Item")
             .collapsible(false)
             .resizable(false)
@@ -477,6 +481,43 @@ impl ProductionManager {
                     }
                 });
             });
+    }
+}
+
+impl eframe::App for ProductionManager {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.status_timer > 0.0 {
+            self.status_timer -= ctx.input(|i| i.unstable_dt);
+            ctx.request_repaint();
+        }
+
+        egui::TopBottomPanel::top("header").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.heading(format!("🎨 {} v{}", APP_NAME, APP_VERSION));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if !self.status_message.is_empty() && self.status_timer > 0.0 {
+                        ui.label(egui::RichText::new(&self.status_message).color(egui::Color32::GREEN));
+                    }
+                });
+            });
+        });
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                for cat_idx in 0..self.data.categories.len() {
+                    self.render_category(ui, cat_idx);
+                    ui.add_space(10.0);
+                }
+            });
+        });
+
+        if self.show_add_popup {
+            self.render_add_popup(ctx);
+        }
+
+        if self.show_edit_popup {
+            self.render_edit_popup(ctx);
+        }
     }
 }
 
