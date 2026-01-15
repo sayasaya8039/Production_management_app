@@ -6,7 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 use uuid::Uuid;
 
-const APP_VERSION: &str = "0.2.0";
+const APP_VERSION: &str = "0.3.0";
 const APP_NAME: &str = "Production Manager";
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -80,23 +80,13 @@ impl Category {
     }
 
     fn to_markdown(&self) -> String {
-        let mut md = format!("# {}
-
-", self.name);
+        let mut md = format!("# {}\n\n", self.name);
         for item in &self.items {
-            md.push_str(&format!("## {}
-
-", item.title));
+            md.push_str(&format!("## {}\n\n", item.title));
             if !item.comment.is_empty() {
-                md.push_str(&format!("{}
-
-", item.comment));
+                md.push_str(&format!("{}\n\n", item.comment));
             }
-            md.push_str(&format!("*Created: {}*
-
----
-
-", item.created_at));
+            md.push_str(&format!("*Created: {}*\n\n---\n\n", item.created_at));
         }
         md
     }
@@ -167,34 +157,19 @@ impl ProductionManager {
         let mut fonts = FontDefinitions::default();
         
         if let Ok(font_data) = std::fs::read("C:/Windows/Fonts/YuGothM.ttc") {
-            fonts.font_data.insert(
-                "yu_gothic".to_owned(),
-                FontData::from_owned(font_data).into(),
-            );
-            fonts.families.get_mut(&FontFamily::Proportional).unwrap()
-                .insert(1, "yu_gothic".to_owned());
-            fonts.families.get_mut(&FontFamily::Monospace).unwrap()
-                .insert(1, "yu_gothic".to_owned());
+            fonts.font_data.insert("yu_gothic".to_owned(), FontData::from_owned(font_data).into());
+            fonts.families.get_mut(&FontFamily::Proportional).unwrap().insert(1, "yu_gothic".to_owned());
+            fonts.families.get_mut(&FontFamily::Monospace).unwrap().insert(1, "yu_gothic".to_owned());
         } else if let Ok(font_data) = std::fs::read("C:/Windows/Fonts/meiryo.ttc") {
-            fonts.font_data.insert(
-                "meiryo".to_owned(),
-                FontData::from_owned(font_data).into(),
-            );
-            fonts.families.get_mut(&FontFamily::Proportional).unwrap()
-                .insert(1, "meiryo".to_owned());
-            fonts.families.get_mut(&FontFamily::Monospace).unwrap()
-                .insert(1, "meiryo".to_owned());
+            fonts.font_data.insert("meiryo".to_owned(), FontData::from_owned(font_data).into());
+            fonts.families.get_mut(&FontFamily::Proportional).unwrap().insert(1, "meiryo".to_owned());
+            fonts.families.get_mut(&FontFamily::Monospace).unwrap().insert(1, "meiryo".to_owned());
         }
         
         if let Ok(font_data) = std::fs::read("C:/Windows/Fonts/seguiemj.ttf") {
-            fonts.font_data.insert(
-                "emoji".to_owned(),
-                FontData::from_owned(font_data).into(),
-            );
-            fonts.families.get_mut(&FontFamily::Proportional).unwrap()
-                .push("emoji".to_owned());
-            fonts.families.get_mut(&FontFamily::Monospace).unwrap()
-                .push("emoji".to_owned());
+            fonts.font_data.insert("emoji".to_owned(), FontData::from_owned(font_data).into());
+            fonts.families.get_mut(&FontFamily::Proportional).unwrap().push("emoji".to_owned());
+            fonts.families.get_mut(&FontFamily::Monospace).unwrap().push("emoji".to_owned());
         }
         
         ctx.set_fonts(fonts);
@@ -233,37 +208,41 @@ impl ProductionManager {
 
 impl ProductionManager {
     fn render_category(&mut self, ui: &mut egui::Ui, cat_idx: usize) {
-        let category = &self.data.categories[cat_idx];
-        let cat_name = category.name.clone();
-        let items_count = category.items.len();
+        let cat_name = self.data.categories[cat_idx].name.clone();
+        let items_count = self.data.categories[cat_idx].items.len();
 
         egui::Frame::default()
-            .fill(egui::Color32::from_rgb(45, 45, 48))
-            .rounding(8.0)
-            .inner_margin(10.0)
+            .fill(egui::Color32::from_rgb(40, 40, 45))
+            .rounding(10.0)
+            .inner_margin(12.0)
+            .outer_margin(4.0)
             .show(ui, |ui| {
-                ui.set_min_width(250.0);
-                ui.set_max_width(280.0);
+                ui.set_width(240.0);
+                ui.set_min_height(450.0);
 
-                ui.horizontal(|ui| {
-                    ui.heading(&cat_name);
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(format!("({})", items_count));
-                    });
+                // Category header
+                ui.vertical_centered(|ui| {
+                    ui.heading(egui::RichText::new(&cat_name).size(18.0));
+                    ui.label(egui::RichText::new(format!("{} items", items_count)).small().weak());
                 });
 
-                ui.add_space(5.0);
+                ui.add_space(10.0);
 
-                if ui.button("➕ Add Item").clicked() {
-                    self.show_add_popup = true;
-                    self.add_popup_category = cat_idx;
-                    self.new_item_title.clear();
-                    self.new_item_comment.clear();
-                }
+                // Add button
+                ui.vertical_centered(|ui| {
+                    if ui.add_sized([200.0, 32.0], egui::Button::new("➕ 追加")).clicked() {
+                        self.show_add_popup = true;
+                        self.add_popup_category = cat_idx;
+                        self.new_item_title.clear();
+                        self.new_item_comment.clear();
+                    }
+                });
 
-                ui.add_space(5.0);
+                ui.add_space(8.0);
 
+                // Sort & Export buttons
                 ui.horizontal(|ui| {
+                    ui.add_space(10.0);
                     if ui.small_button("A-Z").clicked() {
                         self.data.categories[cat_idx].sort_by_title();
                         self.save_data();
@@ -274,202 +253,212 @@ impl ProductionManager {
                         self.data.categories[cat_idx].reorder_items();
                         self.save_data();
                     }
-                    if ui.small_button("📅 Date").clicked() {
+                    if ui.small_button("📅").clicked() {
                         self.data.categories[cat_idx].sort_by_date();
                         self.save_data();
                     }
-                });
-
-                ui.add_space(5.0);
-
-                if ui.button("📄 Export MD").clicked() {
-                    if let Some(path) = rfd::FileDialog::new()
-                        .set_file_name(&format!("{}.md", cat_name))
-                        .add_filter("Markdown", &["md"])
-                        .save_file()
-                    {
-                        let md = self.data.categories[cat_idx].to_markdown();
-                        if fs::write(&path, md).is_ok() {
-                            self.show_status(&format!("Exported to {}", path.display()));
+                    if ui.small_button("📄").clicked() {
+                        if let Some(path) = rfd::FileDialog::new()
+                            .set_file_name(&format!("{}.md", cat_name))
+                            .add_filter("Markdown", &["md"])
+                            .save_file()
+                        {
+                            let md = self.data.categories[cat_idx].to_markdown();
+                            if fs::write(&path, md).is_ok() {
+                                self.show_status("Exported!");
+                            }
                         }
                     }
-                }
+                });
 
+                ui.add_space(8.0);
                 ui.separator();
+                ui.add_space(8.0);
 
+                // Items scroll area
                 egui::ScrollArea::vertical()
-                    .max_height(400.0)
+                    .max_height(320.0)
+                    .auto_shrink([false, false])
                     .show(ui, |ui| {
+                        ui.set_width(216.0);
+                        
                         let items: Vec<_> = self.data.categories[cat_idx]
-                            .items
-                            .iter()
-                            .enumerate()
+                            .items.iter().enumerate()
                             .map(|(i, item)| (i, item.id.clone(), item.title.clone(), item.comment.clone()))
                             .collect();
 
                         for (item_idx, item_id, title, comment) in items {
-                            let is_dragging = self.dragging == Some((cat_idx, item_idx));
-                            let is_target = self.drag_target == Some((cat_idx, item_idx));
-
-                            let frame_color = if is_dragging {
-                                egui::Color32::from_rgb(80, 80, 100)
-                            } else if is_target {
-                                egui::Color32::from_rgb(60, 100, 60)
-                            } else {
-                                egui::Color32::from_rgb(55, 55, 60)
-                            };
-
-                            let response = egui::Frame::default()
-                                .fill(frame_color)
-                                .rounding(4.0)
-                                .inner_margin(8.0)
-                                .show(ui, |ui| {
-                                    ui.horizontal(|ui| {
-                                        ui.label("☰");
-                                        ui.vertical(|ui| {
-                                            ui.strong(&title);
-                                            if !comment.is_empty() {
-                                                ui.label(egui::RichText::new(&comment).small().weak());
-                                            }
-                                        });
-                                    });
-
-                                    ui.horizontal(|ui| {
-                                        if ui.small_button("✏️").clicked() {
-                                            self.show_edit_popup = true;
-                                            self.edit_category = cat_idx;
-                                            self.edit_item_id = item_id.clone();
-                                            self.edit_item_title = title.clone();
-                                            self.edit_item_comment = comment.clone();
-                                        }
-                                        if ui.small_button("🗑️").clicked() {
-                                            self.data.categories[cat_idx].remove_item(&item_id);
-                                            self.save_data();
-                                            self.show_status("Item deleted");
-                                        }
-                                    });
-                                })
-                                .response;
-
-                            let response = response.interact(egui::Sense::drag());
-
-                            if response.drag_started() {
-                                self.dragging = Some((cat_idx, item_idx));
-                            }
-
-                            if response.hovered() && self.dragging.is_some() {
-                                self.drag_target = Some((cat_idx, item_idx));
-                            }
-
-                            if response.drag_stopped() {
-                                if let (Some((from_cat, from_idx)), Some((to_cat, to_idx))) =
-                                    (self.dragging, self.drag_target)
-                                {
-                                    if from_cat == to_cat && from_idx != to_idx {
-                                        self.data.categories[from_cat].move_item(from_idx, to_idx);
-                                        self.save_data();
-                                        self.show_status("Item moved");
-                                    }
-                                }
-                                self.dragging = None;
-                                self.drag_target = None;
-                            }
-
-                            ui.add_space(4.0);
+                            self.render_item(ui, cat_idx, item_idx, &item_id, &title, &comment);
+                            ui.add_space(6.0);
                         }
 
+                        // Drop zone at bottom
                         if self.dragging.is_some() {
-                            let drop_response = ui.allocate_response(
-                                egui::vec2(ui.available_width(), 30.0),
-                                egui::Sense::hover(),
-                            );
-                            if drop_response.hovered() {
+                            let is_target = self.drag_target == Some((cat_idx, self.data.categories[cat_idx].items.len()));
+                            let response = ui.allocate_response(egui::vec2(200.0, 24.0), egui::Sense::hover());
+                            if response.hovered() {
                                 self.drag_target = Some((cat_idx, self.data.categories[cat_idx].items.len()));
-                                ui.painter().rect_filled(
-                                    drop_response.rect,
-                                    4.0,
-                                    egui::Color32::from_rgb(60, 100, 60),
-                                );
                             }
+                            let color = if is_target {
+                                egui::Color32::from_rgb(60, 120, 60)
+                            } else {
+                                egui::Color32::from_rgb(50, 50, 55)
+                            };
+                            ui.painter().rect_filled(response.rect, 4.0, color);
                         }
                     });
             });
     }
 
+    fn render_item(&mut self, ui: &mut egui::Ui, cat_idx: usize, item_idx: usize, item_id: &str, title: &str, comment: &str) {
+        let is_dragging = self.dragging == Some((cat_idx, item_idx));
+        let is_target = self.drag_target == Some((cat_idx, item_idx));
+
+        let frame_color = if is_dragging {
+            egui::Color32::from_rgb(70, 70, 90)
+        } else if is_target {
+            egui::Color32::from_rgb(50, 90, 50)
+        } else {
+            egui::Color32::from_rgb(55, 55, 60)
+        };
+
+        let response = egui::Frame::default()
+            .fill(frame_color)
+            .rounding(6.0)
+            .inner_margin(10.0)
+            .show(ui, |ui| {
+                ui.set_width(196.0);
+                
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("☰").weak());
+                    ui.add_space(4.0);
+                    ui.vertical(|ui| {
+                        ui.strong(title);
+                        if !comment.is_empty() {
+                            ui.label(egui::RichText::new(comment).small().weak());
+                        }
+                    });
+                });
+
+                ui.add_space(6.0);
+
+                ui.horizontal(|ui| {
+                    let item_id_owned = item_id.to_string();
+                    let title_owned = title.to_string();
+                    let comment_owned = comment.to_string();
+                    
+                    if ui.small_button("✏️ 編集").clicked() {
+                        self.show_edit_popup = true;
+                        self.edit_category = cat_idx;
+                        self.edit_item_id = item_id_owned.clone();
+                        self.edit_item_title = title_owned;
+                        self.edit_item_comment = comment_owned;
+                    }
+                    if ui.small_button("🗑️").clicked() {
+                        self.data.categories[cat_idx].remove_item(&item_id_owned);
+                        self.save_data();
+                        self.show_status("削除しました");
+                    }
+                });
+            })
+            .response;
+
+        let response = response.interact(egui::Sense::drag());
+
+        if response.drag_started() {
+            self.dragging = Some((cat_idx, item_idx));
+        }
+
+        if response.hovered() && self.dragging.is_some() {
+            self.drag_target = Some((cat_idx, item_idx));
+        }
+
+        if response.drag_stopped() {
+            if let (Some((from_cat, from_idx)), Some((to_cat, to_idx))) = (self.dragging, self.drag_target) {
+                if from_cat == to_cat && from_idx != to_idx {
+                    self.data.categories[from_cat].move_item(from_idx, to_idx);
+                    self.save_data();
+                    self.show_status("移動しました");
+                }
+            }
+            self.dragging = None;
+            self.drag_target = None;
+        }
+    }
+
     fn render_add_popup(&mut self, ctx: &egui::Context) {
-        egui::Window::new("Add New Item")
+        egui::Window::new("新規追加")
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
                 let cat_name = self.data.categories[self.add_popup_category].name.clone();
-                ui.label(format!("Category: {}", cat_name));
+                ui.label(format!("カテゴリ: {}", cat_name));
 
-                ui.add_space(10.0);
+                ui.add_space(12.0);
 
                 ui.horizontal(|ui| {
-                    ui.label("Title:");
-                    ui.text_edit_singleline(&mut self.new_item_title);
+                    ui.label("タイトル:");
+                    ui.add_sized([250.0, 20.0], egui::TextEdit::singleline(&mut self.new_item_title));
                 });
 
-                ui.add_space(5.0);
+                ui.add_space(8.0);
 
-                ui.label("Comment:");
-                ui.add(egui::TextEdit::multiline(&mut self.new_item_comment).desired_width(300.0).desired_rows(4));
+                ui.label("コメント:");
+                ui.add(egui::TextEdit::multiline(&mut self.new_item_comment)
+                    .desired_width(320.0)
+                    .desired_rows(4));
 
-                ui.add_space(10.0);
+                ui.add_space(12.0);
 
                 ui.horizontal(|ui| {
-                    if ui.button("Cancel").clicked() {
+                    if ui.button("キャンセル").clicked() {
                         self.show_add_popup = false;
                     }
-
-                    ui.add_space(10.0);
-
+                    ui.add_space(20.0);
                     let can_add = !self.new_item_title.trim().is_empty();
-                    if ui.add_enabled(can_add, egui::Button::new("Add")).clicked() {
+                    if ui.add_enabled(can_add, egui::Button::new("追加")).clicked() {
                         self.data.categories[self.add_popup_category].add_item(
                             self.new_item_title.trim().to_string(),
                             self.new_item_comment.trim().to_string(),
                         );
                         self.save_data();
                         self.show_add_popup = false;
-                        self.show_status("Item added");
+                        self.show_status("追加しました");
                     }
                 });
             });
     }
 
     fn render_edit_popup(&mut self, ctx: &egui::Context) {
-        egui::Window::new("Edit Item")
+        egui::Window::new("編集")
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label("Title:");
-                    ui.text_edit_singleline(&mut self.edit_item_title);
+                    ui.label("タイトル:");
+                    ui.add_sized([250.0, 20.0], egui::TextEdit::singleline(&mut self.edit_item_title));
                 });
 
-                ui.add_space(5.0);
+                ui.add_space(8.0);
 
-                ui.label("Comment:");
-                ui.add(egui::TextEdit::multiline(&mut self.edit_item_comment).desired_width(300.0).desired_rows(4));
+                ui.label("コメント:");
+                ui.add(egui::TextEdit::multiline(&mut self.edit_item_comment)
+                    .desired_width(320.0)
+                    .desired_rows(4));
 
-                ui.add_space(10.0);
+                ui.add_space(12.0);
 
                 ui.horizontal(|ui| {
-                    if ui.button("Cancel").clicked() {
+                    if ui.button("キャンセル").clicked() {
                         self.show_edit_popup = false;
                     }
-
-                    ui.add_space(10.0);
-
+                    ui.add_space(20.0);
                     let can_save = !self.edit_item_title.trim().is_empty();
-                    if ui.add_enabled(can_save, egui::Button::new("Save")).clicked() {
+                    if ui.add_enabled(can_save, egui::Button::new("保存")).clicked() {
                         if let Some(item) = self.data.categories[self.edit_category]
-                            .items
-                            .iter_mut()
+                            .items.iter_mut()
                             .find(|i| i.id == self.edit_item_id)
                         {
                             item.title = self.edit_item_title.trim().to_string();
@@ -477,7 +466,7 @@ impl ProductionManager {
                         }
                         self.save_data();
                         self.show_edit_popup = false;
-                        self.show_status("Item updated");
+                        self.show_status("保存しました");
                     }
                 });
             });
@@ -492,22 +481,25 @@ impl eframe::App for ProductionManager {
         }
 
         egui::TopBottomPanel::top("header").show(ctx, |ui| {
+            ui.add_space(4.0);
             ui.horizontal(|ui| {
                 ui.heading(format!("🎨 {} v{}", APP_NAME, APP_VERSION));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if !self.status_message.is_empty() && self.status_timer > 0.0 {
-                        ui.label(egui::RichText::new(&self.status_message).color(egui::Color32::GREEN));
+                        ui.label(egui::RichText::new(&self.status_message).color(egui::Color32::from_rgb(100, 200, 100)));
                     }
                 });
             });
+            ui.add_space(4.0);
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                for cat_idx in 0..self.data.categories.len() {
-                    self.render_category(ui, cat_idx);
-                    ui.add_space(10.0);
-                }
+            egui::ScrollArea::horizontal().show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    for cat_idx in 0..self.data.categories.len() {
+                        self.render_category(ui, cat_idx);
+                    }
+                });
             });
         });
 
@@ -524,7 +516,7 @@ impl eframe::App for ProductionManager {
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([900.0, 600.0])
+            .with_inner_size([850.0, 600.0])
             .with_min_inner_size([600.0, 400.0])
             .with_title(format!("{} v{}", APP_NAME, APP_VERSION)),
         ..Default::default()
