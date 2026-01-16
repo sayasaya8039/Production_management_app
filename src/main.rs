@@ -6,7 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 use uuid::Uuid;
 
-const APP_VERSION: &str = "0.14.0";
+const APP_VERSION: &str = "0.19.0";
 const APP_NAME: &str = "Production Manager";
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -185,6 +185,17 @@ impl ProductionManager {
         }
         
         ctx.set_fonts(fonts);
+        
+        // Set larger font sizes for better readability
+        let mut style = (*ctx.style()).clone();
+        style.text_styles = [
+            (egui::TextStyle::Small, egui::FontId::proportional(14.0)),
+            (egui::TextStyle::Body, egui::FontId::proportional(16.0)),
+            (egui::TextStyle::Button, egui::FontId::proportional(16.0)),
+            (egui::TextStyle::Heading, egui::FontId::proportional(22.0)),
+            (egui::TextStyle::Monospace, egui::FontId::monospace(14.0)),
+        ].into();
+        ctx.set_style(style);
     }
 
     fn get_data_path() -> PathBuf {
@@ -222,6 +233,7 @@ impl ProductionManager {
     fn render_category(&mut self, ui: &mut egui::Ui, cat_idx: usize, column_height: f32) {
         let cat_name = self.data.categories[cat_idx].name.clone();
         let items_count = self.data.categories[cat_idx].items.len();
+        let available_width = ui.available_width();
         let scroll_height = (column_height - 180.0).max(100.0);
 
         egui::Frame::default()
@@ -229,13 +241,12 @@ impl ProductionManager {
             .rounding(10.0)
             .inner_margin(12.0)
             .show(ui, |ui| {
-                ui.set_min_width(236.0);
-                ui.set_max_width(236.0);
+                ui.set_width(available_width - 24.0);
                 
                 // Category header (centered)
                 ui.vertical_centered(|ui| {
-                    ui.heading(egui::RichText::new(&cat_name).size(18.0));
-                    ui.label(egui::RichText::new(format!("{} items", items_count)).small().color(egui::Color32::from_rgb(150, 150, 155)));
+                    ui.heading(egui::RichText::new(&cat_name).size(22.0));
+                    ui.label(egui::RichText::new(format!("{} items", items_count)).size(14.0).color(egui::Color32::from_rgb(150, 150, 155)));
                 });
 
                 ui.add_space(10.0);
@@ -248,9 +259,9 @@ impl ProductionManager {
                         .inner_margin(egui::vec2(16.0, 6.0))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("➕").size(14.0));
+                                ui.label(egui::RichText::new("➕").size(16.0));
                                 ui.add_space(4.0);
-                                ui.label(egui::RichText::new("追加").size(16.0));
+                                ui.label(egui::RichText::new("追加").size(18.0));
                             });
                         }).response.interact(egui::Sense::click());
                     
@@ -310,7 +321,7 @@ impl ProductionManager {
                     .max_height(scroll_height)
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        ui.set_width(212.0);
+                        let item_width = ui.available_width();
                         
                         let items: Vec<_> = self.data.categories[cat_idx]
                             .items.iter().enumerate()
@@ -353,68 +364,43 @@ impl ProductionManager {
             egui::Color32::from_rgb(55, 55, 60)
         };
 
-        let response = egui::Frame::default()
+        let item_id_owned = item_id.to_string();
+        let title_owned = title.to_string();
+        let comment_owned = comment.to_string();
+
+        egui::Frame::default()
             .fill(frame_color)
             .rounding(6.0)
             .inner_margin(10.0)
             .show(ui, |ui| {
-                ui.set_min_width(ui.available_width() - 8.0);
+                ui.set_width(ui.available_width());
                 
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("☰").weak());
-                    ui.add_space(4.0);
-                    ui.vertical(|ui| {
-                        ui.strong(title);
-                        if !comment.is_empty() {
-                            ui.label(egui::RichText::new(comment).small().color(egui::Color32::from_rgb(180, 180, 185)));
-                        }
-                    });
+                ui.vertical(|ui| {
+                    ui.strong(&title_owned);
+                    if !comment_owned.is_empty() {
+                        ui.add_space(4.0);
+                        ui.label(egui::RichText::new(&comment_owned).size(14.0).color(egui::Color32::from_rgb(180, 180, 185)));
+                    }
                 });
 
-                ui.add_space(6.0);
+                ui.add_space(8.0);
 
                 ui.horizontal(|ui| {
-                    let item_id_owned = item_id.to_string();
-                    let title_owned = title.to_string();
-                    let comment_owned = comment.to_string();
-                    
-                    if ui.small_button("✏️").clicked() {
+                    if ui.button("編集").clicked() {
                         self.show_edit_popup = true;
                         self.edit_category = cat_idx;
                         self.edit_item_id = item_id_owned.clone();
-                        self.edit_item_title = title_owned;
-                        self.edit_item_comment = comment_owned;
+                        self.edit_item_title = title_owned.clone();
+                        self.edit_item_comment = comment_owned.clone();
                     }
-                    if ui.small_button("🗑️").clicked() {
+                    ui.add_space(8.0);
+                    if ui.button("削除").clicked() {
                         self.data.categories[cat_idx].remove_item(&item_id_owned);
                         self.save_data();
                         self.show_status("削除しました");
                     }
                 });
-            })
-            .response;
-
-        let response = response.interact(egui::Sense::drag());
-
-        if response.drag_started() {
-            self.dragging = Some((cat_idx, item_idx));
-        }
-
-        if response.hovered() && self.dragging.is_some() {
-            self.drag_target = Some((cat_idx, item_idx));
-        }
-
-        if response.drag_stopped() {
-            if let (Some((from_cat, from_idx)), Some((to_cat, to_idx))) = (self.dragging, self.drag_target) {
-                if from_cat == to_cat && from_idx != to_idx {
-                    self.data.categories[from_cat].move_item(from_idx, to_idx);
-                    self.save_data();
-                    self.show_status("移動しました");
-                }
-            }
-            self.dragging = None;
-            self.drag_target = None;
-        }
+            });
     }
 
     fn render_add_popup(&mut self, ctx: &egui::Context) {
@@ -526,21 +512,15 @@ impl eframe::App for ProductionManager {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             let panel_height = ui.available_height();
+            let num_cats = self.data.categories.len();
             
-            egui::ScrollArea::horizontal()
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 8.0;
-                        for cat_idx in 0..self.data.categories.len() {
-                            ui.push_id(cat_idx, |ui| {
-                                ui.allocate_ui(egui::vec2(268.0, panel_height - 8.0), |ui| {
-                                    self.render_category(ui, cat_idx, panel_height - 8.0);
-                                });
-                            });
-                        }
+            ui.columns(num_cats, |columns| {
+                for (cat_idx, col) in columns.iter_mut().enumerate() {
+                    col.vertical(|ui| {
+                        self.render_category(ui, cat_idx, panel_height - 16.0);
                     });
-                });
+                }
+            });
         });
 
         if self.show_add_popup {
